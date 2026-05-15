@@ -380,3 +380,125 @@ body { font-family: var(--font-sans); background: var(--bg-primary); color: var(
 @media (max-width: 760px) {
   .headline-grid { grid-template-columns: 1fr; }
 }
+
+/* --- Avatar voice-call demo --- */
+button.topbar-avatar { border: none; padding: 0; font-family: var(--font-sans); }
+.audio-error-banner { background: rgba(220,38,38,0.08); color: #b91c1c; border-bottom: 1px solid rgba(220,38,38,0.2); font-size: 12px; padding: 8px 24px; }
+
+/* --- Voice-call drawer sections --- */
+.voice-call-steps { display: flex; flex-direction: column; gap: 10px; }
+.voice-call-step { display: flex; gap: 10px; align-items: flex-start; }
+.voice-call-step-bullet {
+  flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(124, 58, 237, 0.1); color: var(--accent-purple);
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; font-family: var(--font-mono);
+}
+.voice-call-step-body { flex: 1; min-width: 0; }
+.voice-call-step-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 2px; }
+.voice-call-step-label { font-size: 12px; font-weight: 600; color: var(--text-primary); }
+.voice-call-step-source {
+  font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 3px;
+  background: var(--bg-elevated); color: var(--text-secondary);
+  font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.3px;
+}
+.voice-call-step-result { font-size: 12px; color: var(--text-secondary); }
+.voice-call-step-source.platform-pill {
+  background: rgba(124, 58, 237, 0.08);
+  color: var(--accent-purple);
+  font-family: var(--font-sans);
+  letter-spacing: 0.2px;
+  text-transform: none;
+}
+
+/* Data sources consulted — compact chip row above the reasoning steps */
+.platform-chip-row {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-bottom: 12px;
+}
+.platform-chip-compact {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border-default); border-radius: 999px;
+  padding: 3px 9px 3px 7px; background: white;
+  font-size: 11px; font-weight: 600;
+}
+.platform-chip-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+
+/* Call snapshot — compact caller bar with audio */
+.call-snapshot { display: flex; flex-direction: column; gap: 8px; }
+.call-snapshot-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+.call-snapshot-caller { font-weight: 600; color: var(--text-primary); }
+.call-snapshot-mono { font-family: var(--font-mono); }
+.call-snapshot-sep { color: var(--text-tertiary); }
+.call-snapshot-audio { width: 100%; height: 32px; }
+
+/* Collapsible transcript */
+.drawer-section-toggle {
+  display: flex; align-items: center; justify-content: space-between;
+  width: 100%; background: none; border: none; padding: 0;
+  cursor: pointer; font-family: var(--font-sans);
+}
+.drawer-section-toggle:hover .drawer-section-chevron { color: var(--text-primary); }
+.drawer-section-count {
+  font-size: 10px; font-weight: 500; color: var(--text-tertiary);
+  margin-left: 6px; text-transform: none; letter-spacing: 0;
+}
+.drawer-section-chevron {
+  font-size: 16px; line-height: 1; color: var(--text-tertiary);
+  width: 22px; height: 22px; border-radius: 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+
+/* Compact release info card (replaces the 6-row kv block) */
+.release-info {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; margin-bottom: 12px;
+  border: 1px solid var(--border-subtle); border-radius: 6px;
+  background: var(--bg-elevated);
+}
+.release-info-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; color: var(--text-primary); }
+.release-info-mono { font-family: var(--font-mono); font-weight: 700; color: var(--text-primary); }
+.release-info-sep { color: var(--text-tertiary); }
+.release-info-muted { color: var(--text-secondary); }
+.release-info-tag {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.3px;
+  padding: 2px 7px; border-radius: 3px; text-transform: uppercase;
+}
+.release-info-tag.hold { background: rgba(220, 38, 38, 0.1); color: #b91c1c; }
+.release-info-tag.ok { background: rgba(34, 197, 94, 0.1); color: #15803d; }
+
+.voice-call-transcript { display: flex; flex-direction: column; gap: 6px; }
+.voice-call-line { display: grid; grid-template-columns: 56px 1fr; gap: 8px; font-size: 12px; padding: 6px 8px; border-radius: 4px; }
+.voice-call-line.caller { background: rgba(8, 145, 178, 0.06); }
+.voice-call-line.agent { background: rgba(124, 58, 237, 0.06); }
+.voice-call-line-who { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text-tertiary); padding-top: 1px; }
+.voice-call-line-text { color: var(--text-primary); }
+
+.voice-callback-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.voice-callback-dot.dialing { background: #d97706; animation: avatar-pulse 1.2s ease-out infinite; }
+.voice-callback-dot.connected { background: #22c55e; }
+
+/* --- Notify release alert panel --- */
+.voice-release-context { margin-bottom: 10px; }
+.voice-notify-panel { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: 12px; background: var(--bg-elevated); }
+.voice-notify-channels { display: flex; gap: 6px; flex-wrap: wrap; }
+.voice-notify-channel {
+  padding: 6px 10px; border-radius: 6px; font-size: 12px; font-weight: 600;
+  border: 1px solid var(--border-default); background: white; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary);
+  font-family: var(--font-sans);
+}
+.voice-notify-channel:hover:not(:disabled) { background: var(--bg-elevated); }
+.voice-notify-channel.active { background: rgba(124, 58, 237, 0.1); border-color: var(--accent-purple); color: var(--accent-purple); }
+.voice-notify-channel:disabled { opacity: 0.5; cursor: not-allowed; }
+.voice-notify-dest { font-size: 11px; color: var(--text-tertiary); }
+.voice-notify-dest strong { color: var(--text-primary); font-family: var(--font-mono); font-weight: 600; }
+.voice-notify-message { font-family: var(--font-sans); font-size: 12px; padding: 8px; border: 1px solid var(--border-default); border-radius: 4px; resize: vertical; min-height: 70px; color: var(--text-primary); }
+.voice-notify-sent {
+  display: flex; flex-direction: column; gap: 10px;
+  border: 1px solid rgba(34,197,94,0.3); border-radius: var(--radius-md);
+  padding: 12px; background: rgba(34,197,94,0.05);
+}
+.voice-notify-sent-row { font-size: 12px; color: var(--text-primary); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.voice-notify-sent-message { font-size: 12px; color: var(--text-secondary); padding: 8px 10px; background: white; border: 1px solid var(--border-subtle); border-radius: 4px; font-style: italic; }
+.voice-notify-sent .btn { align-self: flex-start; }

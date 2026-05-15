@@ -8,8 +8,16 @@ export function Home({ terminal, window: timeWindow, theme, onAgent, onView, kpi
   const windowLabel = { today: 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days' }[timeWindow];
   const termLabel = TERMINALS.find(t => t.id === terminal).name;
 
+  // Tiny "Xs ago" indicator so the live refresh is visible to users (and testable).
+  const [, setNow] = React.useState(Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const sinceTick = kpis._lastTickAt ? Math.max(0, Math.floor((Date.now() - kpis._lastTickAt) / 1000)) : 0;
+
   return (
-    <div className="home-view">
+    <div className="home-view" data-testid="home-view">
       <div className={`headline ${theme}`}>
         <div className="headline-header">
           <div>
@@ -19,37 +27,38 @@ export function Home({ terminal, window: timeWindow, theme, onAgent, onView, kpi
           <div className="headline-pulse">
             <span className="headline-pulse-dot"></span>
             <span>{agents.length} agents live · {hitlCount} HITL open</span>
+            <span style={{ opacity: 0.6, marginLeft: 8 }} data-testid="last-tick">· updated {sinceTick}s ago</span>
           </div>
         </div>
         <div className="headline-grid">
           <div className="headline-cell hero">
             <div className="headline-label">Customer Inquiries Handled</div>
-            <div className={`headline-value hero ${kpis._bumped ? 'bumped' : ''}`}>{fmtNum(kpis.handled)}</div>
+            <div className={`headline-value hero ${kpis._bumped ? 'bumped' : ''}`} data-testid="kpi-handled">{fmtNum(kpis.handled)}</div>
             <div className="headline-sub">
               <span className="up">▲ 9.4%</span>
               <span style={{ opacity: 0.5 }}>vs prior period</span>
             </div>
             <div className="headline-mini">
-              <span className="headline-mini-item"><span className="dot" style={{ background: '#34D399' }}></span>Email {fmtNum(kpis.email)}</span>
-              <span className="headline-mini-item"><span className="dot" style={{ background: '#FCD34D' }}></span>Phone {fmtNum(kpis.phone)}</span>
+              <span className="headline-mini-item"><span className="dot" style={{ background: '#34D399' }}></span>Email <span data-testid="kpi-email">{fmtNum(kpis.email)}</span></span>
+              <span className="headline-mini-item"><span className="dot" style={{ background: '#FCD34D' }}></span>Phone <span data-testid="kpi-phone">{fmtNum(kpis.phone)}</span></span>
             </div>
           </div>
 
           <div className="headline-cell">
             <div className="headline-label">Auto-Resolution Rate</div>
-            <div className="headline-value">{kpis.autoAvg}<span style={{ fontSize: 22, marginLeft: 2, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>%</span></div>
+            <div className="headline-value" data-testid="kpi-autoAvg">{kpis.autoAvg}<span style={{ fontSize: 22, marginLeft: 2, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>%</span></div>
             <div className="headline-sub"><span className="up">▲ 3.6 pts</span></div>
           </div>
 
           <div className="headline-cell">
             <div className="headline-label">FTE Hours Saved</div>
-            <div className="headline-value">{fmtNum(parseInt(kpis.fteHours))}<span style={{ fontSize: 18, marginLeft: 4, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>h</span></div>
+            <div className="headline-value" data-testid="kpi-fteHours">{fmtNum(parseInt(kpis.fteHours))}<span style={{ fontSize: 18, marginLeft: 4, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>h</span></div>
             <div className="headline-sub" style={{ fontSize: 10 }}>~{Math.round(parseInt(kpis.fteHours) / 8)} FTE-days</div>
           </div>
 
           <div className="headline-cell">
             <div className="headline-label">Avg Handle Time</div>
-            <div className="headline-value">{kpis.ahtAvg}<span style={{ fontSize: 18, marginLeft: 4, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>min</span></div>
+            <div className="headline-value" data-testid="kpi-ahtAvg">{kpis.ahtAvg}<span style={{ fontSize: 18, marginLeft: 4, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>min</span></div>
             <div className="headline-sub"><span className="up">▼ 8.7%</span></div>
           </div>
         </div>
@@ -59,28 +68,28 @@ export function Home({ terminal, window: timeWindow, theme, onAgent, onView, kpi
         <div className={`kpi-card ${kpis.slaBreaches ? 'alert' : ''}`} onClick={() => onView('work')}>
           <div className="kpi-label">SLA Breaches <span className="pill" style={{ background: 'rgba(220,38,38,0.10)', color: '#DC2626' }}>NOW</span></div>
           <div className="kpi-value-row">
-            <span className="kpi-value" style={{ color: '#DC2626' }}>{kpis.slaBreaches}</span>
+            <span className="kpi-value" style={{ color: '#DC2626' }} data-testid="kpi-slaBreaches">{kpis.slaBreaches}</span>
           </div>
           <div className="kpi-sub">2 gate · 1 customs · oldest 1h 42m</div>
         </div>
         <div className="kpi-card warning" onClick={() => onView('work')}>
           <div className="kpi-label">HITL Pending</div>
           <div className="kpi-value-row">
-            <span className="kpi-value" style={{ color: '#D97706' }}>{kpis.hitlOpen}</span>
+            <span className="kpi-value" style={{ color: '#D97706' }} data-testid="kpi-hitlOpen">{kpis.hitlOpen}</span>
           </div>
           <div className="kpi-sub">{urgentCount} urgent · oldest {oldestHitl}</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Containers Touched</div>
           <div className="kpi-value-row">
-            <span className="kpi-value">{fmtNum(kpis.containers)}</span>
+            <span className="kpi-value" data-testid="kpi-containers">{fmtNum(kpis.containers)}</span>
           </div>
           <div className="kpi-sub"><span className="up">▲ 6.1%</span> 62% of inquiries</div>
         </div>
         <div className="kpi-card">
           <div className="kpi-label">Demurrage $ Explained</div>
           <div className="kpi-value-row">
-            <span className="kpi-value">${fmtNum(kpis.demExplained)}</span>
+            <span className="kpi-value" data-testid="kpi-demExplained">${fmtNum(kpis.demExplained)}</span>
           </div>
           <div className="kpi-sub">$1.2M auto · $645k disputes</div>
         </div>
@@ -109,11 +118,11 @@ export function Home({ terminal, window: timeWindow, theme, onAgent, onView, kpi
           <div className="agents-grid">
             {agents.map(a => {
               const handled = a.liveHandled ?? a.metrics[0].value;
-              const auto = a.metrics[1].value;
-              const aht = a.metrics[2].value;
+              const auto = a.liveAuto ?? a.metrics[1].value;
+              const aht = a.liveAht ?? a.metrics[2].value;
               const hc = HITL_ITEMS.filter(h => h.agentId === a.id).length;
               return (
-                <div key={a.id} className="agent-card" onClick={() => onAgent(a.id)}>
+                <div key={a.id} className="agent-card" onClick={() => onAgent(a.id)} data-testid={`agent-card-${a.id}`}>
                   <div className="agent-card-accent" style={{ background: a.color }}></div>
                   <div className="agent-card-head">
                     <div className="agent-card-icon" style={{ background: `${a.color}1A`, color: a.color }}><Icon name={a.icon} size={18} /></div>
@@ -125,15 +134,15 @@ export function Home({ terminal, window: timeWindow, theme, onAgent, onView, kpi
                   <div className="agent-card-metrics">
                     <div>
                       <div className="agent-card-metric-label">Handled</div>
-                      <div className="agent-card-metric-value">{fmtNum(handled)}</div>
+                      <div className="agent-card-metric-value" data-testid={`agent-${a.id}-handled`}>{fmtNum(handled)}</div>
                     </div>
                     <div>
                       <div className="agent-card-metric-label">Auto-rate</div>
-                      <div className="agent-card-metric-value">{auto}<span className="agent-card-metric-unit">%</span></div>
+                      <div className="agent-card-metric-value" data-testid={`agent-${a.id}-auto`}>{auto}<span className="agent-card-metric-unit">%</span></div>
                     </div>
                     <div>
                       <div className="agent-card-metric-label">AHT</div>
-                      <div className="agent-card-metric-value">{aht}<span className="agent-card-metric-unit">m</span></div>
+                      <div className="agent-card-metric-value" data-testid={`agent-${a.id}-aht`}>{aht}<span className="agent-card-metric-unit">m</span></div>
                     </div>
                   </div>
                   <div className="agent-card-foot">

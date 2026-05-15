@@ -4,14 +4,16 @@ import { MY_WORK_TASKS, HITL_ITEMS, slaLabel, fmtTime } from '../data/tasks';
 import { Icon } from './Icons';
 import { fmtNum, PriorityDot, StatusBadge, PRIORITY_COLOR } from './Primitives';
 
-export function MyWork({ terminal, onOpenTask, initialTab }) {
+export function MyWork({ terminal, onOpenTask, initialTab, extraTasks = [] }) {
   const [tab, setTab] = React.useState(initialTab || 'all');
   const [search, setSearch] = React.useState('');
   React.useEffect(() => {
     if (initialTab) setTab(initialTab);
   }, [initialTab]);
 
-  let rows = MY_WORK_TASKS;
+  const allTasks = React.useMemo(() => [...extraTasks, ...MY_WORK_TASKS], [extraTasks]);
+
+  let rows = allTasks;
   if (terminal !== 'all') rows = rows.filter(r => r.terminal === terminal);
   if (tab === 'hitl') rows = rows.filter(r => r.status === 'hitl');
   else if (tab === 'running') rows = rows.filter(r => r.status === 'running');
@@ -19,18 +21,24 @@ export function MyWork({ terminal, onOpenTask, initialTab }) {
   else if (tab === 'success') rows = rows.filter(r => r.status === 'success');
   if (search) rows = rows.filter(r => (r.summary + ' ' + r.id).toLowerCase().includes(search.toLowerCase()));
 
+  const extraIds = new Set(extraTasks.map(t => t.id));
   rows = [...rows].sort((a, b) => {
+    const aExtra = extraIds.has(a.id);
+    const bExtra = extraIds.has(b.id);
+    if (aExtra && !bExtra) return -1;
+    if (bExtra && !aExtra) return 1;
+    if (aExtra && bExtra) return new Date(b.started || 0) - new Date(a.started || 0);
     if (a.status === 'hitl' && b.status !== 'hitl') return -1;
     if (b.status === 'hitl' && a.status !== 'hitl') return 1;
     return new Date(a.sla) - new Date(b.sla);
   });
 
   const counts = {
-    all: MY_WORK_TASKS.filter(r => terminal === 'all' || r.terminal === terminal).length,
-    hitl: MY_WORK_TASKS.filter(r => r.status === 'hitl' && (terminal === 'all' || r.terminal === terminal)).length,
-    running: MY_WORK_TASKS.filter(r => r.status === 'running' && (terminal === 'all' || r.terminal === terminal)).length,
-    failed: MY_WORK_TASKS.filter(r => r.status === 'failed' && (terminal === 'all' || r.terminal === terminal)).length,
-    success: MY_WORK_TASKS.filter(r => r.status === 'success' && (terminal === 'all' || r.terminal === terminal)).length,
+    all: allTasks.filter(r => terminal === 'all' || r.terminal === terminal).length,
+    hitl: allTasks.filter(r => r.status === 'hitl' && (terminal === 'all' || r.terminal === terminal)).length,
+    running: allTasks.filter(r => r.status === 'running' && (terminal === 'all' || r.terminal === terminal)).length,
+    failed: allTasks.filter(r => r.status === 'failed' && (terminal === 'all' || r.terminal === terminal)).length,
+    success: allTasks.filter(r => r.status === 'success' && (terminal === 'all' || r.terminal === terminal)).length,
   };
 
   return (
@@ -137,13 +145,257 @@ function hitlRecommendation(hitl) {
   return { action, confidence, rationale: firstSentence };
 }
 
-export function TaskDrawer({ taskId, onClose }) {
-  const t = MY_WORK_TASKS.find(x => x.id === taskId);
+const RELEASE_CHANNELS = [
+  { id: 'sms',   label: 'SMS',   icon: 'message' },
+  { id: 'email', label: 'Email', icon: 'message' },
+  { id: 'voice', label: 'Voice', icon: 'pulse' },
+];
+
+// Canonical Carrix platforms (sourced from the agent configs in data/agents.js).
+const CARRIX_PLATFORMS = {
+  mainsail:  { name: 'Mainsail',          category: 'TOS',             color: '#0891B2', purpose: 'Terminal Operating System — bookings, discharge, holds, gate events, LFD' },
+  spinnaker: { name: 'Spinnaker',         category: 'Yard',            color: '#7C3AED', purpose: 'Yard inventory — row / stack / block positions, peel-pile config' },
+  emodal:    { name: 'eModal',            category: 'Customer Portal', color: '#059669', purpose: 'US customer-visible scheduling and gate appointments' },
+  citas:     { name: 'CiTAS',             category: 'Customer Portal', color: '#D97706', purpose: 'ZLO customer-visible scheduling (Manzanillo)' },
+  forecast:  { name: 'Forecast',          category: 'Reconciliation',  color: '#DB2777', purpose: 'Vessel cutoffs and cross-system reconciliation' },
+  traffic:   { name: 'Traffic Control',   category: 'Gate',            color: '#DC2626', purpose: 'Gate transactions, trouble-window data, ERR codes' },
+  billing:   { name: 'Billing Integration', category: 'Billing',       color: '#16A34A', purpose: 'Payment posting feed, tariff/demurrage schedule' },
+  tideworks: { name: 'Tide Works EDI',    category: 'EDI',             color: '#8B5CF6', purpose: 'External EDI for customs (CBP/USDA), steamship lines and vendor feeds' },
+  ivr:       { name: 'Voice IVR',         category: 'Channel',         color: '#64748B', purpose: 'Inbound voice routing and caller ANI capture' },
+  nlu:       { name: 'Carrix NLU',        category: 'AI',              color: '#475569', purpose: 'Intent classification and entity extraction' },
+  tts:       { name: 'Voice Synthesis',   category: 'AI',              color: '#475569', purpose: 'Text-to-speech response generation' },
+  'operator-queue': { name: 'Operator Queue', category: 'Workflow',    color: '#0EA5E9', purpose: 'HITL follow-up queue surfaced in My Work' },
+};
+
+function defaultReleaseMessage(vc) {
+  const pr = vc.pendingRelease || {};
+  const hold = pr.holdCode || 'customs hold';
+  const cont = pr.container || vc.objectId || '';
+  const slot = pr.slot || 'your scheduled appointment';
+  const term = pr.terminal || 'the terminal';
+  const yard = pr.yardPosition ? `; container is staged at ${pr.yardPosition}` : '';
+  return `Carrix release alert: the ${hold} on container ${cont} has just been lifted. You're cleared for pickup. Your appointment window ${slot} at ${term} is good to go${yard}. Reply STOP to opt out.`;
+}
+
+function VoiceCallBody({ vc }) {
+  const [notifyState, setNotifyState] = React.useState('idle'); // 'idle' | 'sending' | 'sent'
+  const [channel, setChannel] = React.useState('sms');
+  const [message, setMessage] = React.useState(() => defaultReleaseMessage(vc));
+  const [sentAt, setSentAt] = React.useState(null);
+  const [showTranscript, setShowTranscript] = React.useState(false);
+
+  React.useEffect(() => {
+    if (notifyState !== 'sending') return;
+    const id = setTimeout(() => {
+      setNotifyState('sent');
+      setSentAt(new Date());
+    }, 1500);
+    return () => clearTimeout(id);
+  }, [notifyState]);
+
+  const destination =
+    channel === 'sms'   ? vc.callerPhone :
+    channel === 'email' ? (vc.callerEmail || 'caller email on file') :
+                          vc.callerPhone;
+
+  return (
+    <React.Fragment>
+      <div className="drawer-section">
+        <div className="drawer-section-title"><Icon name="bot" size={12} /> AI Summary</div>
+        <div className="drawer-summary" data-testid="voice-call-summary">{vc.summary}</div>
+      </div>
+
+      <div className="drawer-section">
+        <div className="drawer-section-title"><Icon name="message" size={12} /> Call snapshot</div>
+        <div className="call-snapshot" data-testid="voice-call-snapshot">
+          <div className="call-snapshot-meta">
+            <span className="call-snapshot-caller">{vc.caller}</span>
+            <span className="call-snapshot-sep">·</span>
+            <span className="call-snapshot-mono">{vc.callerPhone}</span>
+            <span className="call-snapshot-sep">·</span>
+            <span>{vc.duration}</span>
+          </div>
+          {vc.callRecordingUrl && (
+            <audio controls preload="none" src={vc.callRecordingUrl} className="call-snapshot-audio" />
+          )}
+        </div>
+      </div>
+
+      <div className="drawer-section">
+        <div className="drawer-section-title"><Icon name="pulse" size={12} /> How the agent answered</div>
+
+        {vc.sourcePlatforms && vc.sourcePlatforms.length > 0 && (
+          <div className="platform-chip-row" data-testid="voice-call-platforms">
+            {vc.sourcePlatforms.map(pid => {
+              const p = CARRIX_PLATFORMS[pid];
+              if (!p) return null;
+              return (
+                <span
+                  key={pid}
+                  className="platform-chip-compact"
+                  title={p.purpose}
+                  style={{ borderColor: `${p.color}40`, color: p.color }}
+                >
+                  <span className="platform-chip-dot" style={{ background: p.color }} />
+                  {p.name}
+                </span>
+              );
+            })}
+          </div>
+        )}
+
+        <div className="voice-call-steps" data-testid="voice-call-steps">
+          {vc.sources.map(s => (
+            <div key={s.step} className="voice-call-step">
+              <div className="voice-call-step-bullet">{s.step}</div>
+              <div className="voice-call-step-body">
+                <div className="voice-call-step-head">
+                  <span className="voice-call-step-label">{s.label}</span>
+                  {s.platforms && s.platforms.map(pid => {
+                    const p = CARRIX_PLATFORMS[pid];
+                    if (!p) return null;
+                    return (
+                      <span
+                        key={pid}
+                        className="voice-call-step-source platform-pill"
+                        title={p.purpose}
+                        style={{ background: `${p.color}14`, color: p.color }}
+                      >
+                        {p.name}
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="voice-call-step-result">{s.result}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {vc.transcript && vc.transcript.length > 0 && (
+        <div className="drawer-section">
+          <button
+            className="drawer-section-toggle"
+            onClick={() => setShowTranscript(v => !v)}
+            data-testid="voice-call-transcript-toggle"
+            aria-expanded={showTranscript}
+          >
+            <span className="drawer-section-title" style={{ marginBottom: 0 }}>
+              <Icon name="message" size={12} /> Transcript
+              <span className="drawer-section-count">{vc.transcript.length} lines</span>
+            </span>
+            <span className="drawer-section-chevron">{showTranscript ? '−' : '+'}</span>
+          </button>
+          {showTranscript && (
+            <div className="voice-call-transcript" style={{ marginTop: 10 }}>
+              {vc.transcript.map((line, i) => (
+                <div key={i} className={`voice-call-line ${line.who}`}>
+                  <span className="voice-call-line-who">{line.who === 'agent' ? 'Agent' : 'Caller'}</span>
+                  <span className="voice-call-line-text">{line.text}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="drawer-section">
+        <div className="drawer-section-title"><Icon name="warn" size={12} /> Notify release alert</div>
+        {vc.pendingRelease && (
+          <div className="release-info" data-testid="release-info">
+            <div className="release-info-row">
+              <span className="release-info-mono">{vc.pendingRelease.container}</span>
+              {vc.pendingRelease.vessel && <><span className="release-info-sep">·</span><span>Ex {vc.pendingRelease.vessel}</span></>}
+              {vc.pendingRelease.yardPosition && <><span className="release-info-sep">·</span><span>{vc.pendingRelease.yardPosition}</span></>}
+              {vc.pendingRelease.terminal && <><span className="release-info-sep">·</span><span>{vc.pendingRelease.terminal}</span></>}
+            </div>
+            <div className="release-info-row">
+              <span className="release-info-tag hold">{vc.pendingRelease.holdCode}</span>
+              <span className="release-info-muted">owner {vc.pendingRelease.owner}{vc.pendingRelease.expectedClear ? ` · clears ${vc.pendingRelease.expectedClear}` : ''}</span>
+            </div>
+            <div className="release-info-row">
+              <span className="release-info-tag ok">Pickup</span>
+              <span className="release-info-muted">{vc.pendingRelease.slot}</span>
+            </div>
+          </div>
+        )}
+
+        {notifyState !== 'sent' && (
+          <div className="voice-notify-panel" data-testid="voice-notify-panel">
+            <div className="voice-notify-channels" role="radiogroup" aria-label="Notification channel">
+              {RELEASE_CHANNELS.map(c => (
+                <button
+                  key={c.id}
+                  className={`voice-notify-channel ${channel === c.id ? 'active' : ''}`}
+                  onClick={() => setChannel(c.id)}
+                  disabled={notifyState === 'sending'}
+                  data-testid={`voice-notify-channel-${c.id}`}
+                  role="radio"
+                  aria-checked={channel === c.id}
+                >
+                  <Icon name={c.icon} size={12} /> {c.label}
+                </button>
+              ))}
+            </div>
+            <div className="voice-notify-dest">
+              Sending to <strong>{destination}</strong>
+            </div>
+            <textarea
+              className="voice-notify-message"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              rows={4}
+              disabled={notifyState === 'sending'}
+              data-testid="voice-notify-message"
+            />
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                className="btn"
+                onClick={() => setMessage(defaultReleaseMessage(vc))}
+                disabled={notifyState === 'sending'}
+              >
+                Reset message
+              </button>
+              <button
+                className="btn primary"
+                data-testid="voice-notify-send-btn"
+                onClick={() => setNotifyState('sending')}
+                disabled={notifyState === 'sending' || !message.trim()}
+              >
+                <Icon name="warn" size={12} />
+                {notifyState === 'sending' ? 'Sending release alert…' : 'Send release alert'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {notifyState === 'sent' && (
+          <div className="voice-notify-sent" data-testid="voice-notify-sent">
+            <div className="voice-notify-sent-row">
+              <span className="voice-callback-dot connected" />
+              Release alert sent via <strong>{channel.toUpperCase()}</strong> to <strong>{destination}</strong>
+              {sentAt && <span style={{ marginLeft: 6, color: 'var(--text-tertiary)', fontWeight: 500 }}>· {sentAt.toLocaleTimeString()}</span>}
+            </div>
+            <div className="voice-notify-sent-message">"{message}"</div>
+            <button className="btn" onClick={() => { setNotifyState('idle'); setSentAt(null); }}>
+              Send another
+            </button>
+          </div>
+        )}
+      </div>
+    </React.Fragment>
+  );
+}
+
+export function TaskDrawer({ taskId, onClose, extraTasks = [] }) {
+  const t = extraTasks.find(x => x.id === taskId) || MY_WORK_TASKS.find(x => x.id === taskId);
   const open = !!t;
   const hitl = t ? HITL_ITEMS.find(h => h.taskId === t.id) : null;
   const ag = t ? AGENTS.find(a => a.id === t.agentId) : null;
   const sla = t ? slaLabel(t.sla) : null;
   const rec = hitlRecommendation(hitl);
+  const isVoice = !!(t && t.voiceCall);
 
   return (
     <React.Fragment>
@@ -169,7 +421,9 @@ export function TaskDrawer({ taskId, onClose }) {
             </div>
 
             <div className="drawer-body">
-              {hitl ? (
+              {isVoice ? (
+                <VoiceCallBody vc={t.voiceCall} />
+              ) : hitl ? (
                 <React.Fragment>
                   <div className="drawer-section">
                     <div className="drawer-section-title">AI Summary</div>
